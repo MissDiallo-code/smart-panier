@@ -8,17 +8,22 @@ app.secret_key = "cle_securite_master_789"
 DB_NAME = "courses_multiusers.db"
 SITE_URL = "https://smart-panier-1.onrender.com" 
 
-# --- INITIALISATION DE LA BASE DE DONNÉES ---
+# --- INITIALISATION ET MIGRATION DE LA BASE DE DONNÉES ---
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, budget_max REAL DEFAULT 50000)')
-        conn.execute('CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, nom TEXT, prix REAL, qte INTEGER, fait BOOLEAN, cat TEXT, date_ajout DATETIME DEFAULT CURRENT_TIMESTAMP)')
-        conn.execute('CREATE TABLE IF NOT EXISTS historique (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, nb_articles INTEGER, date_achat DATETIME DEFAULT CURRENT_TIMESTAMP)')
+        cursor = conn.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, budget_max REAL DEFAULT 50000)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, nom TEXT, prix REAL, qte INTEGER, fait BOOLEAN, cat TEXT, date_ajout DATETIME DEFAULT CURRENT_TIMESTAMP)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS historique (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, nb_articles INTEGER, date_achat DATETIME DEFAULT CURRENT_TIMESTAMP)')
         
-        try:
-            conn.execute('ALTER TABLE users ADD COLUMN budget_max REAL DEFAULT 50000')
-        except sqlite3.OperationalError:
-            pass
+        # Vérification et ajout forcé de la colonne budget_max si elle n'existe pas
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'budget_max' not in columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN budget_max REAL DEFAULT 50000')
+            
+        conn.commit()
+
 init_db()
 
 CAT_CONFIG = {
@@ -158,33 +163,31 @@ MAIN_HTML = """
                     </form>
                 </div>
 
-               <!-- Répartition et Modification du Budget -->
-<div class="card">
-    <h6 class="fw-bold mb-2">📊 Budget Max</h6>
-    
-    <!-- Formulaire natif ultra simple -->
-    <form action="/set_budget" method="POST" class="mb-3">
-        <div class="input-group input-group-sm">
-            <input type="number" step="any" name="val" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
-            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
-            <button type="submit" class="btn btn-primary fw-bold">Modifier</button>
-        </div>
-    </form>
+                <!-- Répartition et Modification du Budget -->
+                <div class="card">
+                    <h6 class="fw-bold mb-2">📊 Budget Max</h6>
+                    <form action="/set_budget" method="POST" class="mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="number" step="any" name="val" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
+                            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
+                            <button type="submit" class="btn btn-primary fw-bold">Modifier</button>
+                        </div>
+                    </form>
 
-    <hr class="border-secondary my-2">
+                    <hr class="border-secondary my-2">
 
-    {% for c, v in stats.items() %}
-    <div class="mb-2">
-        <div class="d-flex justify-content-between small mb-1">
-            <span>{{c}}</span>
-            <span class="fw-bold">{{v.p}}%</span>
-        </div>
-        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
-            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
+                    {% for c, v in stats.items() %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>{{c}}</span>
+                            <span class="fw-bold">{{v.p}}%</span>
+                        </div>
+                        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
 
             <!-- Colonne Droite : Total, Recherche et Liste -->
@@ -253,41 +256,6 @@ MAIN_HTML = """
     </div>
 
     <script>
-        function updateBudget() {
-            let inputVal = document.getElementById('budgetInput').value;
-            let btn = document.getElementById('btnUpdateBudget');
-
-            if (!inputVal || inputVal <= 0) {
-                alert("Veuillez entrer un budget valide.");
-                return;
-            }
-
-            btn.innerText = "⏳...";
-            btn.disabled = true;
-
-            let formData = new FormData();
-            formData.append('val', inputVal);
-
-            fetch('/set_budget', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    alert("Erreur lors de la mise à jour.");
-                    btn.innerText = "Modifier";
-                    btn.disabled = false;
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                btn.innerText = "Modifier";
-                btn.disabled = false;
-            });
-        }
-
         function filterList() {
             let input = document.getElementById('searchInput').value.toLowerCase();
             let items = document.querySelectorAll('#itemsList .list-group-item');
@@ -332,6 +300,7 @@ def register():
         try:
             with sqlite3.connect(DB_NAME) as conn: 
                 conn.execute("INSERT INTO users (username, password) VALUES (?,?)", (u,p))
+                conn.commit()
             flash("Compte créé avec succès ! Connectez-vous.")
             return redirect(url_for('login'))
         except: 
@@ -382,7 +351,14 @@ def home():
     uid = session['uid']
     with sqlite3.connect(DB_NAME) as conn:
         user_data = conn.execute("SELECT budget_max FROM users WHERE id=?", (uid,)).fetchone()
-        budget_user = user_data[0] if user_data and user_data[0] else 50000.0
+        
+        # S'assure d'obtenir une valeur numérique valide
+        budget_user = 50000.0
+        if user_data and user_data[0] is not None:
+            try:
+                budget_user = float(user_data[0])
+            except ValueError:
+                pass
 
         liste = conn.execute("SELECT * FROM courses WHERE user_id=? ORDER BY fait ASC, id DESC", (uid,)).fetchall()
         total = conn.execute("SELECT SUM(prix*qte) FROM courses WHERE user_id=? AND fait=0", (uid,)).fetchone()[0] or 0
@@ -415,6 +391,7 @@ def set_budget():
             if val >= 0:
                 with sqlite3.connect(DB_NAME) as conn:
                     conn.execute("UPDATE users SET budget_max=? WHERE id=?", (val, session['uid']))
+                    conn.commit()
         except (ValueError, TypeError):
             pass
     return redirect(url_for('home'))
@@ -428,6 +405,7 @@ def add():
         c = request.form.get('cat')
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute("INSERT INTO courses (user_id, nom, prix, qte, fait, cat) VALUES (?,?,?,?,0,?)", (session['uid'], n, p, q, c))
+            conn.commit()
     return redirect(url_for('home'))
 
 @app.route('/check/<int:id>')
@@ -435,6 +413,7 @@ def check(id):
     if 'uid' in session:
         with sqlite3.connect(DB_NAME) as conn: 
             conn.execute("UPDATE courses SET fait = NOT fait WHERE id=? AND user_id=?", (id, session['uid']))
+            conn.commit()
     return redirect(url_for('home'))
 
 @app.route('/del/<int:id>')
@@ -442,6 +421,7 @@ def delete(id):
     if 'uid' in session:
         with sqlite3.connect(DB_NAME) as conn: 
             conn.execute("DELETE FROM courses WHERE id=? AND user_id=?", (id, session['uid']))
+            conn.commit()
     return redirect(url_for('home'))
 
 @app.route('/cloturer')
@@ -456,6 +436,7 @@ def cloturer():
             if total > 0:
                 conn.execute("INSERT INTO historique (user_id, total, nb_articles) VALUES (?,?,?)", (uid, total, nb))
                 conn.execute("DELETE FROM courses WHERE user_id=?", (uid,))
+                conn.commit()
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
