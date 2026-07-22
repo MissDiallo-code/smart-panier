@@ -158,24 +158,36 @@ MAIN_HTML = """
                     </form>
                 </div>
 
-                <!-- Répartition du Budget -->
-                <div class="card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold mb-0">📊 Budget (Max: {{ "%.0f"|format(budget) }} f)</h6>
-                        <button class="btn btn-link btn-sm text-info p-0 text-decoration-none" onclick="changeBudget()">Modifier</button>
-                    </div>
-                    {% for c, v in stats.items() %}
-                    <div class="mb-2">
-                        <div class="d-flex justify-content-between small mb-1">
-                            <span>{{c}}</span>
-                            <span class="fw-bold">{{v.p}}%</span>
-                        </div>
-                        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
-                            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
+          <!-- Répartition du Budget avec Formulaire direct -->
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0">📊 Budget Max</h6>
+    </div>
+
+    <!-- Formulaire d'ajustement du budget -->
+    <form action="/set_budget" method="POST" class="d-flex gap-2 mb-3">
+        <div class="input-group input-group-sm">
+            <input type="number" step="any" name="val" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
+            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
+            <button type="submit" class="btn btn-primary fw-bold">Modifier</button>
+        </div>
+    </form>
+
+    <hr class="border-secondary my-2">
+
+    <!-- Barres de répartition -->
+    {% for c, v in stats.items() %}
+    <div class="mb-2">
+        <div class="d-flex justify-content-between small mb-1">
+            <span>{{c}}</span>
+            <span class="fw-bold">{{v.p}}%</span>
+        </div>
+        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
+            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
             </div>
 
             <!-- Colonne Droite : Total & Liste -->
