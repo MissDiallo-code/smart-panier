@@ -158,31 +158,31 @@ MAIN_HTML = """
                     </form>
                 </div>
 
-               <!-- Répartition et Modification du Budget -->
-<div class="card">
-    <h6 class="fw-bold mb-2">📊 Budget Max</h6>
-    <div class="d-flex gap-2 mb-3">
-        <div class="input-group input-group-sm">
-            <input type="number" step="any" id="budgetInput" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
-            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
-            <button type="button" onclick="updateBudget()" class="btn btn-primary fw-bold" id="btnUpdateBudget">Modifier</button>
-        </div>
-    </div>
+                <!-- Répartition et Modification du Budget -->
+                <div class="card">
+                    <h6 class="fw-bold mb-2">📊 Budget Max</h6>
+                    <div class="d-flex gap-2 mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="number" step="any" id="budgetInput" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
+                            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
+                            <button type="button" onclick="updateBudget()" class="btn btn-primary fw-bold" id="btnUpdateBudget">Modifier</button>
+                        </div>
+                    </div>
 
-    <hr class="border-secondary my-2">
+                    <hr class="border-secondary my-2">
 
-    {% for c, v in stats.items() %}
-    <div class="mb-2">
-        <div class="d-flex justify-content-between small mb-1">
-            <span>{{c}}</span>
-            <span class="fw-bold">{{v.p}}%</span>
-        </div>
-        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
-            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
+                    {% for c, v in stats.items() %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>{{c}}</span>
+                            <span class="fw-bold">{{v.p}}%</span>
+                        </div>
+                        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
 
             <!-- Colonne Droite : Total, Recherche et Liste -->
@@ -251,7 +251,41 @@ MAIN_HTML = """
     </div>
 
     <script>
-        // Filtre de recherche dynamique
+        function updateBudget() {
+            let inputVal = document.getElementById('budgetInput').value;
+            let btn = document.getElementById('btnUpdateBudget');
+
+            if (!inputVal || inputVal <= 0) {
+                alert("Veuillez entrer un budget valide.");
+                return;
+            }
+
+            btn.innerText = "⏳...";
+            btn.disabled = true;
+
+            let formData = new FormData();
+            formData.append('val', inputVal);
+
+            fetch('/set_budget', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert("Erreur lors de la mise à jour.");
+                    btn.innerText = "Modifier";
+                    btn.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                btn.innerText = "Modifier";
+                btn.disabled = false;
+            });
+        }
+
         function filterList() {
             let input = document.getElementById('searchInput').value.toLowerCase();
             let items = document.querySelectorAll('#itemsList .list-group-item');
@@ -375,7 +409,6 @@ def home():
 def set_budget():
     if 'uid' in session:
         try:
-            # Récupère la valeur depuis un formulaire classique OU du JSON/fetch
             val_raw = request.form.get('val') or (request.json.get('val') if request.is_json else None)
             val = float(val_raw)
             if val >= 0:
@@ -385,7 +418,7 @@ def set_budget():
         except (ValueError, TypeError) as e:
             return {"status": "error", "message": str(e)}, 400
     return redirect(url_for('home'))
-    
+
 @app.route('/add', methods=['POST'])
 def add():
     if 'uid' in session:
@@ -427,39 +460,3 @@ def cloturer():
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
-function updateBudget() {
-    let inputVal = document.getElementById('budgetInput').value;
-    let btn = document.getElementById('btnUpdateBudget');
-
-    if (!inputVal || inputVal <= 0) {
-        alert("Veuillez entrer un budget valide.");
-        return;
-    }
-
-    btn.innerText = "⏳...";
-    btn.disabled = true;
-
-    let formData = new FormData();
-    formData.append('val', inputVal);
-
-    fetch('/set_budget', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (response.ok) {
-            // Recharge la page proprement pour recalculer les totaux et dépassements
-            window.location.reload();
-        } else {
-            alert("Erreur lors de la mise à jour.");
-            btn.innerText = "Modifier";
-            btn.disabled = false;
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        btn.innerText = "Modifier";
-        btn.disabled = false;
-    });
-}
