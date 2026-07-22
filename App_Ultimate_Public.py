@@ -13,13 +13,12 @@ def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, budget_max REAL DEFAULT 50000)')
         conn.execute('CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, nom TEXT, prix REAL, qte INTEGER, fait BOOLEAN, cat TEXT, date_ajout DATETIME DEFAULT CURRENT_TIMESTAMP)')
-        conn.execute('CREATE TABLE IF NOT EXISTS historique (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, date_achat DATETIME)')
+        conn.execute('CREATE TABLE IF NOT EXISTS historique (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, nb_articles INTEGER, date_achat DATETIME DEFAULT CURRENT_TIMESTAMP)')
         
-        # Migration au cas où la colonne budget_max n'existait pas encore
         try:
             conn.execute('ALTER TABLE users ADD COLUMN budget_max REAL DEFAULT 50000')
         except sqlite3.OperationalError:
-            pass # La colonne existe déjà
+            pass
 init_db()
 
 CAT_CONFIG = {
@@ -31,7 +30,7 @@ CAT_CONFIG = {
     "✨ Autre": "#64748b"
 }
 
-# --- TEMPLATES HTML / CSS OPTIMISÉS ---
+# --- TEMPLATES HTML ---
 
 AUTH_HTML = """
 <!DOCTYPE html>
@@ -90,7 +89,7 @@ LANDING_HTML = """
 <body>
     <div class="hero">
         <h1 class="display-3 fw-bold mb-3">🛒 SmartPanier</h1>
-        <p class="lead text-secondary mb-5 max-w-lg mx-auto">Gérez votre budget courses intelligemment, évitez les mauvaises surprises en caisse et partagez vos listes en un clic.</p>
+        <p class="lead text-secondary mb-5 max-w-lg mx-auto">Gérez votre budget courses intelligemment, évitez les mauvaises surprises en caisse et partez à la conquête de vos économies.</p>
         <a href="/register" class="btn-start shadow-lg">COMMENCER GRATUITEMENT</a>
         <p class="mt-4 small text-secondary">Déjà membre ? <a href="/login" class="text-info fw-bold text-decoration-none">Se connecter</a></p>
     </div>
@@ -123,7 +122,7 @@ MAIN_HTML = """
     </style>
 </head>
 <body>
-    <div class="container max-w-md" style="max-width: 900px;">
+    <div class="container" style="max-width: 950px;">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center my-3 no-print">
             <h5 class="mb-0 fw-bold">👤 {{ username }}</h5>
@@ -158,39 +157,34 @@ MAIN_HTML = """
                     </form>
                 </div>
 
-          <!-- Répartition du Budget avec Formulaire direct -->
-<div class="card">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0">📊 Budget Max</h6>
-    </div>
+                <!-- Répartition et Modification du Budget -->
+                <div class="card">
+                    <h6 class="fw-bold mb-2">📊 Budget Max</h6>
+                    <form action="/set_budget" method="POST" class="d-flex gap-2 mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="number" step="any" name="val" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
+                            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
+                            <button type="submit" class="btn btn-primary fw-bold">Modifier</button>
+                        </div>
+                    </form>
 
-    <!-- Formulaire d'ajustement du budget -->
-    <form action="/set_budget" method="POST" class="d-flex gap-2 mb-3">
-        <div class="input-group input-group-sm">
-            <input type="number" step="any" name="val" class="form-control" value="{{ "%.0f"|format(budget) }}" placeholder="Nouveau budget..." required>
-            <span class="input-group-text bg-secondary text-white border-secondary">FCFA</span>
-            <button type="submit" class="btn btn-primary fw-bold">Modifier</button>
-        </div>
-    </form>
+                    <hr class="border-secondary my-2">
 
-    <hr class="border-secondary my-2">
-
-    <!-- Barres de répartition -->
-    {% for c, v in stats.items() %}
-    <div class="mb-2">
-        <div class="d-flex justify-content-between small mb-1">
-            <span>{{c}}</span>
-            <span class="fw-bold">{{v.p}}%</span>
-        </div>
-        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
-            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
+                    {% for c, v in stats.items() %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>{{c}}</span>
+                            <span class="fw-bold">{{v.p}}%</span>
+                        </div>
+                        <div style="background: #0f172a; height: 6px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: {{v.p}}%; background: {{v.c}}; height: 100%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
 
-            <!-- Colonne Droite : Total & Liste -->
+            <!-- Colonne Droite : Total, Liste et Historique -->
             <div class="col-lg-7">
                 <div class="card text-center">
                     <span class="small text-uppercase text-secondary fw-bold">Total Actuel</span>
@@ -204,12 +198,12 @@ MAIN_HTML = """
                     <div class="d-flex gap-2 mt-2 no-print">
                         <button onclick="copyWA()" class="btn btn-success flex-grow-1 btn-action"><i class="fab fa-whatsapp me-1"></i> Partager</button>
                         <button onclick="window.print()" class="btn btn-outline-info btn-action"><i class="fa fa-print"></i></button>
-                        <a href="/cloturer" class="btn btn-outline-danger btn-action" onclick="return confirm('Voulez-vous vider toute la liste ?')">🏁 Finir</a>
+                        <a href="/cloturer" class="btn btn-outline-danger btn-action" onclick="return confirm('Enregistrer et clôturer la liste actuelle ?')">🏁 Finir</a>
                     </div>
                 </div>
 
                 <!-- Items Liste -->
-                <div class="list-group">
+                <div class="list-group mb-4">
                     {% for item in liste %}
                     <div class="list-group-item d-flex justify-content-between align-items-center {{ 'done' if item[5] }}">
                         <div class="me-2">
@@ -228,6 +222,24 @@ MAIN_HTML = """
                     <div class="text-center text-secondary py-4">Votre panier est vide pour l'instant ! 🛒</div>
                     {% endfor %}
                 </div>
+
+                <!-- Historique des anciennes courses -->
+                {% if histo %}
+                <div class="card no-print">
+                    <h6 class="fw-bold mb-3"><i class="fa fa-history text-info me-2"></i> Historique des Achats</h6>
+                    <div class="list-group list-group-flush">
+                        {% for h in histo %}
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary">
+                            <div>
+                                <small class="text-secondary d-block">{{ h[3] }}</small>
+                                <span class="small">{{ h[2] }} article(s)</span>
+                            </div>
+                            <span class="fw-bold text-info">{{ "%.0f"|format(h[1]) }} FCFA</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -248,13 +260,6 @@ MAIN_HTML = """
             t += "\n*💰 TOTAL : " + document.querySelector('.total-display').innerText.trim() + "*\n\n_Géré avec SmartPanier : {{url}}_";
             
             navigator.clipboard.writeText(t).then(() => alert("Liste copiée pour WhatsApp !"));
-        }
-
-        function changeBudget() {
-            let n = prompt("Entrez votre nouveau budget max (FCFA) :", "{{ budget }}");
-            if (n && !isNaN(n)) {
-                window.location.href = "/set_budget?val=" + n;
-            }
         }
     </script>
 </body>
@@ -302,14 +307,15 @@ def home():
     
     uid = session['uid']
     with sqlite3.connect(DB_NAME) as conn:
-        # Récupération budget de l'utilisateur
         user_data = conn.execute("SELECT budget_max FROM users WHERE id=?", (uid,)).fetchone()
         budget_user = user_data[0] if user_data and user_data[0] else 50000.0
 
         liste = conn.execute("SELECT * FROM courses WHERE user_id=? ORDER BY fait ASC, id DESC", (uid,)).fetchall()
         total = conn.execute("SELECT SUM(prix*qte) FROM courses WHERE user_id=? AND fait=0", (uid,)).fetchone()[0] or 0
         
-        # Calcul des statistiques par catégorie
+        # Récupération de l'historique (les 5 derniers achats)
+        histo = conn.execute("SELECT id, total, nb_articles, date_achat FROM historique WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,)).fetchall()
+
         stats = {}
         glob = conn.execute("SELECT SUM(prix*qte) FROM courses WHERE user_id=?", (uid,)).fetchone()[0] or 1
         for c, color in CAT_CONFIG.items():
@@ -325,15 +331,20 @@ def home():
         categories=list(CAT_CONFIG.keys()), 
         config=CAT_CONFIG, 
         stats=stats, 
+        histo=histo,
         url=SITE_URL
     )
 
-@app.route('/set_budget')
+@app.route('/set_budget', methods=['POST'])
 def set_budget():
     if 'uid' in session:
-        val = float(request.args.get('val', 50000))
-        with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("UPDATE users SET budget_max=? WHERE id=?", (val, session['uid']))
+        try:
+            val = float(request.form.get('val', 50000))
+            if val > 0:
+                with sqlite3.connect(DB_NAME) as conn:
+                    conn.execute("UPDATE users SET budget_max=? WHERE id=?", (val, session['uid']))
+        except ValueError:
+            pass
     return redirect(url_for('home'))
 
 @app.route('/add', methods=['POST'])
@@ -364,8 +375,18 @@ def delete(id):
 @app.route('/cloturer')
 def cloturer():
     if 'uid' in session:
+        uid = session['uid']
         with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("DELETE FROM courses WHERE user_id=?", (session['uid'],))
+            # Récupérer le total et le nombre d'articles
+            res = conn.execute("SELECT SUM(prix*qte), COUNT(*) FROM courses WHERE user_id=?", (uid,)).fetchone()
+            total = res[0] or 0
+            nb = res[1] or 0
+            
+            if total > 0:
+                # Sauvegarder dans l'historique
+                conn.execute("INSERT INTO historique (user_id, total, nb_articles) VALUES (?,?,?)", (uid, total, nb))
+                # Vider le panier actuel
+                conn.execute("DELETE FROM courses WHERE user_id=?", (uid,))
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
