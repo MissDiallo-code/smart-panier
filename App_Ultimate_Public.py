@@ -8,20 +8,13 @@ app.secret_key = "cle_securite_master_789"
 DB_NAME = "courses_multiusers.db"
 SITE_URL = "https://smart-panier-1.onrender.com" 
 
-# --- INITIALISATION ET MIGRATION DE LA BASE DE DONNÉES ---
+# --- INITIALISATION DE LA BASE DE DONNÉES ---
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, budget_max REAL DEFAULT 50000)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)')
         cursor.execute('CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, nom TEXT, prix REAL, qte INTEGER, fait BOOLEAN, cat TEXT, date_ajout DATETIME DEFAULT CURRENT_TIMESTAMP)')
         cursor.execute('CREATE TABLE IF NOT EXISTS historique (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, nb_articles INTEGER, date_achat DATETIME DEFAULT CURRENT_TIMESTAMP)')
-        
-        # Vérification et ajout forcé de la colonne budget_max si elle n'existe pas
-        cursor.execute("PRAGMA table_info(users)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if 'budget_max' not in columns:
-            cursor.execute('ALTER TABLE users ADD COLUMN budget_max REAL DEFAULT 50000')
-            
         conn.commit()
 
 init_db()
@@ -349,17 +342,11 @@ def home():
         return render_template_string(LANDING_HTML)
     
     uid = session['uid']
-    with sqlite3.connect(DB_NAME) as conn:
-        user_data = conn.execute("SELECT budget_max FROM users WHERE id=?", (uid,)).fetchone()
-        
-        # S'assure d'obtenir une valeur numérique valide
-        budget_user = 50000.0
-        if user_data and user_data[0] is not None:
-            try:
-                budget_user = float(user_data[0])
-            except ValueError:
-                pass
+    
+    # Récupérer le budget depuis la session (par défaut 50000)
+    budget_user = session.get('budget', 50000.0)
 
+    with sqlite3.connect(DB_NAME) as conn:
         liste = conn.execute("SELECT * FROM courses WHERE user_id=? ORDER BY fait ASC, id DESC", (uid,)).fetchall()
         total = conn.execute("SELECT SUM(prix*qte) FROM courses WHERE user_id=? AND fait=0", (uid,)).fetchone()[0] or 0
         histo = conn.execute("SELECT id, total, nb_articles, date_achat FROM historique WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,)).fetchall()
@@ -389,9 +376,7 @@ def set_budget():
         try:
             val = float(request.form.get('val', 50000))
             if val >= 0:
-                with sqlite3.connect(DB_NAME) as conn:
-                    conn.execute("UPDATE users SET budget_max=? WHERE id=?", (val, session['uid']))
-                    conn.commit()
+                session['budget'] = val  # Sauvegardé directement en session
         except (ValueError, TypeError):
             pass
     return redirect(url_for('home'))
@@ -440,4 +425,4 @@ def cloturer():
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True))
