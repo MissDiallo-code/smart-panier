@@ -205,7 +205,7 @@ MAIN_HTML = """
         .form-control, .form-select { 
             background: var(--input-bg) !important; 
             border: 1px solid var(--border) !important; 
-            color: write !important; 
+            color: var(--text) !important; 
             padding: 10px 14px; 
             font-size: 15px; 
         }
@@ -229,7 +229,7 @@ MAIN_HTML = """
 
         .list-group-item { 
             background: var(--card); 
-            color:write; 
+            color: var(--text); 
             border: 1px solid var(--border); 
             margin-bottom: 8px; 
             border-radius: 12px !important; 
@@ -259,7 +259,7 @@ MAIN_HTML = """
             cursor: pointer;
             border: 1px solid var(--border);
             background: var(--card);
-            color: write;
+            color: var(--text);
             transition: all 0.2s;
         }
 
@@ -721,35 +721,61 @@ def load_recipe():
 @app.route('/save_template', methods=['POST'])
 def save_template():
     if 'uid' in session:
-        title = request.form.get('title', '').strip()
-        if title:
-            with sqlite3.connect(DB_NAME) as conn:
-                items = conn.execute("SELECT nom, prix, qte, cat FROM courses WHERE user_id=?", (session['uid'],)).fetchall()
-                if items:
-                    items_list = [{"nom": i[0], "prix": i[1], "qte": i[2], "cat": i[3]} for i in items]
-                    conn.execute("INSERT INTO templates (user_id, title, items_json) VALUES (?,?,?)",
-                                 (session['uid'], title, json.dumps(items_list)))
-                    conn.commit()
+        title = request.form.get('title', 'Ma liste').strip()
+        with sqlite3.connect(DB_NAME) as conn:
+            items = conn.execute("SELECT nom, prix, qte, cat FROM courses WHERE user_id=?", (session['uid'],)).fetchall()
+            items_json = json.dumps([{"nom": x[0], "prix": x[1], "qte": x[2], "cat": x[3]} for x in items])
+            conn.execute("INSERT INTO templates (user_id, title, items_json) VALUES (?,?,?)", (session['uid'], title, items_json))
+            conn.commit()
     return redirect(url_for('home'))
 
-@app.route('/load_template/<int:id>')
-def load_template(id):
+@app.route('/load_template/<int:template_id>')
+def load_template(template_id):
     if 'uid' in session:
         with sqlite3.connect(DB_NAME) as conn:
-            row = conn.execute("SELECT items_json FROM templates WHERE id=? AND user_id=?", (id, session['uid'])).fetchone()
-            if row:
-                items = json.loads(row[0])
+            r = conn.execute("SELECT items_json FROM templates WHERE id=? AND user_id=?", (template_id, session['uid'])).fetchone()
+            if r:
+                items = json.loads(r[0])
                 for item in items:
-                    conn.execute("INSERT INTO courses (user_id, nom, prix, qte, cat) VALUES (?,?,?,?,0,?)",
+                    conn.execute("INSERT INTO courses (user_id, nom, prix, qte, fait, cat) VALUES (?,?,?,?,0,?)",
                                  (session['uid'], item['nom'], item['prix'], item['qte'], item['cat']))
                 conn.commit()
     return redirect(url_for('home'))
 
-@app.route('/del_template/<int:id>')
-def del_template(id):
+@app.route('/del_template/<int:template_id>')
+def del_template(template_id):
     if 'uid' in session:
         with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("DELETE FROM templates WHERE id=? AND user_id=?", (id, session['uid']))
+            conn.execute("DELETE FROM templates WHERE id=? AND user_id=?", (template_id, session['uid']))
+            conn.commit()
+    return redirect(url_for('home'))
+
+@app.route('/add', methods=['POST'])
+def add():
+    if 'uid' in session:
+        nom = request.form.get('nom').strip()
+        qte = int(request.form.get('qte', 1))
+        prix = float(request.form.get('prix') or 0)
+        cat = request.form.get('cat', '✨ Autre')
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("INSERT INTO courses (user_id, nom, prix, qte, fait, cat) VALUES (?,?,?,?,0,?)",
+                         (session['uid'], nom, prix, qte, cat))
+            conn.commit()
+    return redirect(url_for('home'))
+
+@app.route('/check/<int:item_id>')
+def check(item_id):
+    if 'uid' in session:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("UPDATE courses SET fait = NOT fait WHERE id=? AND user_id=?", (item_id, session['uid']))
+            conn.commit()
+    return redirect(url_for('home'))
+
+@app.route('/del/<int:item_id>')
+def delete(item_id):
+    if 'uid' in session:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("DELETE FROM courses WHERE id=? AND user_id=?", (item_id, session['uid']))
             conn.commit()
     return redirect(url_for('home'))
 
@@ -757,47 +783,15 @@ def del_template(id):
 def set_budget():
     if 'uid' in session:
         try:
-            val = float(request.form.get('val', 50000))
-            if val >= 0:
-                session['budget'] = val
-        except (ValueError, TypeError):
+            session['budget'] = float(request.form.get('val', 50000))
+        except ValueError:
             pass
     return redirect(url_for('home'))
 
 @app.route('/set_devise', methods=['POST'])
 def set_devise():
     if 'uid' in session:
-        d = request.form.get('devise')
-        if d in DEVISES:
-            session['devise'] = d
-    return redirect(url_for('home'))
-
-@app.route('/add', methods=['POST'])
-def add():
-    if 'uid' in session:
-        n = request.form.get('nom').strip()
-        p = float(request.form.get('prix', 0) or 0)
-        q = int(request.form.get('qte', 1) or 1)
-        c = request.form.get('cat')
-        with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("INSERT INTO courses (user_id, nom, prix, qte, fait, cat) VALUES (?,?,?,?,0,?)", (session['uid'], n, p, q, c))
-            conn.commit()
-    return redirect(url_for('home'))
-
-@app.route('/check/<int:id>')
-def check(id):
-    if 'uid' in session:
-        with sqlite3.connect(DB_NAME) as conn: 
-            conn.execute("UPDATE courses SET fait = NOT fait WHERE id=? AND user_id=?", (id, session['uid']))
-            conn.commit()
-    return redirect(url_for('home'))
-
-@app.route('/del/<int:id>')
-def delete(id):
-    if 'uid' in session:
-        with sqlite3.connect(DB_NAME) as conn: 
-            conn.execute("DELETE FROM courses WHERE id=? AND user_id=?", (id, session['uid']))
-            conn.commit()
+        session['devise'] = request.form.get('devise', 'FCFA')
     return redirect(url_for('home'))
 
 @app.route('/cloturer')
@@ -805,12 +799,10 @@ def cloturer():
     if 'uid' in session:
         uid = session['uid']
         with sqlite3.connect(DB_NAME) as conn:
-            res = conn.execute("SELECT SUM(prix*qte), COUNT(*) FROM courses WHERE user_id=?", (uid,)).fetchone()
-            total = res[0] or 0
-            nb = res[1] or 0
-            
-            if total > 0:
-                conn.execute("INSERT INTO historique (user_id, total, nb_articles) VALUES (?,?,?)", (uid, total, nb))
+            total = conn.execute("SELECT SUM(prix*qte) FROM courses WHERE user_id=? AND fait=0", (uid,)).fetchone()[0] or 0
+            count = conn.execute("SELECT COUNT(*) FROM courses WHERE user_id=? AND fait=0", (uid,)).fetchone()[0] or 0
+            if total > 0 or count > 0:
+                conn.execute("INSERT INTO historique (user_id, total, nb_articles) VALUES (?,?,?)", (uid, total, count))
                 conn.execute("DELETE FROM courses WHERE user_id=?", (uid,))
                 conn.commit()
     return redirect(url_for('home'))
