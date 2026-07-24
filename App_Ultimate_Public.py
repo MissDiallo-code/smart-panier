@@ -56,7 +56,7 @@ PRESET_RECIPES = {
     ]
 }
 
-# --- SW WORKER JS FOR PWA ---
+# --- PWA WORKER JS & MANIFEST ---
 MANIFEST_JSON = """{
   "short_name": "SmartPanier",
   "name": "SmartPanier - Gestion de Courses & Budget",
@@ -73,13 +73,16 @@ MANIFEST_JSON = """{
   "display": "standalone"
 }"""
 
-SW_JS = """const CACHE_NAME = 'smartpanier-v1';
-const urlsToCache = ['/', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css', 'https://cdn.jsdelivr.net/npm/chart.js'];
+SW_JS = """const CACHE_NAME = 'smartpanier-v2';
+const urlsToCache = [
+  '/', 
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', 
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css', 
+  'https://cdn.jsdelivr.net/npm/chart.js'
+];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
 });
 
 self.addEventListener('fetch', event => {
@@ -155,6 +158,59 @@ LANDING_HTML = """
 </html>
 """
 
+PROFILE_HTML = """
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>Mon Profil - SmartPanier</title>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; padding: 30px 15px; }
+        .profile-card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 25px; max-width: 500px; margin: 0 auto; }
+        .form-control { background: #0f172a; border: 1px solid #334155; color: white; }
+        .form-control:focus { background: #0f172a; color: white; border-color: #3b82f6; box-shadow: none; }
+    </style>
+</head>
+<body>
+    <div class="profile-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0"><i class="fa fa-user-gear text-warning me-2"></i>Mon Profil</h4>
+            <a href="/" class="btn btn-sm btn-outline-secondary"><i class="fa fa-arrow-left"></i> Retour</a>
+        </div>
+
+        {% with m = get_flashed_messages() %}
+            {% if m %}<div class="alert alert-info py-2 small mb-3">{{m[0]}}</div>{% endif %}
+        {% endwith %}
+
+        <div class="mb-4">
+            <label class="small text-secondary fw-bold">Nom d'utilisateur</label>
+            <input type="text" class="form-control" value="{{ username }}" disabled>
+        </div>
+
+        <!-- Changer Mot de Passe -->
+        <form action="/change_password" method="POST" class="mb-4 border-top border-secondary pt-3">
+            <h6 class="fw-bold mb-3 text-warning">🔑 Modifier le mot de passe</h6>
+            <input type="password" name="old_pass" class="form-control mb-2" placeholder="Ancien mot de passe" required>
+            <input type="password" name="new_pass" class="form-control mb-3" placeholder="Nouveau mot de passe" required>
+            <button type="submit" class="btn btn-warning w-100 fw-bold">Mettre à jour</button>
+        </form>
+
+        <!-- Actions de Réinitialisation -->
+        <div class="border-top border-secondary pt-3">
+            <h6 class="fw-bold mb-3 text-danger">⚠️ Zone de Danger</h6>
+            <div class="d-flex flex-column gap-2">
+                <a href="/clear_history" class="btn btn-outline-warning btn-sm" onclick="return confirm('Effacer tout votre historique d\'achats ?')">Vider l'historique d'achats</a>
+                <a href="/reset_all" class="btn btn-outline-danger btn-sm" onclick="return confirm('Attention ! Cela va tout supprimer (listes, modèles, historique). Continuer ?')">Réinitialiser toutes mes données</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 MAIN_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -222,9 +278,15 @@ MAIN_HTML = """
             line-height: 1.1; 
         }
 
-        .budget-over { 
-            color: #ef4444 !important; 
-            animation: shake 0.5s; 
+        .budget-alert-banner {
+            background: #ef4444;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            animation: pulse 1.5s infinite;
         }
 
         .list-group-item { 
@@ -235,10 +297,6 @@ MAIN_HTML = """
             border-radius: 12px !important; 
             padding: 12px 16px; 
             transition: all 0.3s ease; 
-        }
-
-        .list-group-item:hover {
-            transform: translateY(-2px);
         }
 
         .done { 
@@ -269,7 +327,7 @@ MAIN_HTML = """
             border-color: #3b82f6;
         }
 
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
         @media print { .no-print { display: none !important; } body { background: white; color: black; } .card { border: none; } }
     </style>
 </head>
@@ -277,8 +335,17 @@ MAIN_HTML = """
     <div class="container" style="max-width: 980px;">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center my-3 no-print">
-            <h5 class="mb-0 fw-bold">👤 {{ username }}</h5>
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="mb-0 fw-bold">👤 {{ username }}</h5>
+                <a href="/profile" class="btn btn-sm btn-outline-warning"><i class="fa fa-user-cog"></i> Profil</a>
+            </div>
+
             <div class="d-flex gap-2 align-items-center">
+                <!-- Bouton Installer PWA -->
+                <button id="pwaInstallBtn" class="btn btn-sm btn-warning fw-bold d-none">
+                    <i class="fa fa-download me-1"></i> Installer
+                </button>
+
                 <!-- Selecteur Devise -->
                 <form action="/set_devise" method="POST" class="m-0">
                     <select name="devise" onchange="this.form.submit()" class="form-select form-select-sm" style="width: auto;">
@@ -298,6 +365,13 @@ MAIN_HTML = """
                 <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="fa fa-sign-out-alt"></i></a>
             </div>
         </div>
+
+        <!-- BANNIÈRE ALERTE BUDGET -->
+        {% if total > budget %}
+        <div class="budget-alert-banner shadow-lg">
+            🚨 ATTTENTION : Budget dépassé de {{ "%.0f"|format(total - budget) }} {{ devise }} ! 🚨
+        </div>
+        {% endif %}
 
         <div class="row g-3">
             <!-- Colonne Gauche : Formulaire, Budget, Recettes & Modèles -->
@@ -388,12 +462,9 @@ MAIN_HTML = """
             <div class="col-lg-7">
                 <div class="card text-center">
                     <span class="small text-uppercase text-secondary fw-bold">Total Actuel</span>
-                    <div class="total-display my-1 {{ 'budget-over' if total > budget }}">
+                    <div class="total-display my-1">
                         {{ "%.0f"|format(total) }} <span style="font-size: 1.5rem;">{{ devise }}</span>
                     </div>
-                    {% if total > budget %}
-                        <div class="text-danger small fw-bold mb-2">⚠️ Budget max dépassé de {{ "%.0f"|format(total - budget) }} {{ devise }} !</div>
-                    {% endif %}
                     
                     <div class="d-flex gap-2 mt-2 no-print">
                         <button onclick="copyWA()" class="btn btn-success flex-grow-1 btn-action"><i class="fab fa-whatsapp me-1"></i> Partager</button>
@@ -463,13 +534,55 @@ MAIN_HTML = """
 
     <script>
         let currentCatFilter = 'ALL';
+        const isBudgetOver = {{ 'true' if total > budget else 'false' }};
 
-        // REGISTRATION SERVICE WORKER (PWA)
+        // ALERTE SONORE EN CAS DE DÉPASSEMENT DE BUDGET
+        function playAlertBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        if (isBudgetOver) {
+            window.addEventListener('load', () => setTimeout(playAlertBeep, 500));
+        }
+
+        // SERVICE WORKER & BOUTON D'INSTALLATION PWA
+        let deferredPrompt;
+        const installBtn = document.getElementById('pwaInstallBtn');
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Fail:', err));
             });
         }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('d-none');
+        });
+
+        installBtn.addEventListener('click', () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        installBtn.classList.add('d-none');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        });
 
         // GESTION DU THÈME
         function applyTheme(theme) {
@@ -552,9 +665,7 @@ MAIN_HTML = """
                 },
                 options: {
                     responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    }
+                    plugins: { legend: { display: false } }
                 }
             });
 
@@ -633,6 +744,50 @@ def login():
 @app.route('/logout')
 def logout(): 
     session.clear()
+    return redirect(url_for('home'))
+
+@app.route('/profile')
+def profile():
+    if 'uid' not in session: return redirect(url_for('login'))
+    return render_template_string(PROFILE_HTML, username=session['user'])
+
+@app.route('/change_password', methods=['POST'])
+def change_password():
+    if 'uid' not in session: return redirect(url_for('login'))
+    
+    old_p = request.form.get('old_pass')
+    new_p = request.form.get('new_pass')
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        r = conn.execute("SELECT password FROM users WHERE id=?", (session['uid'],)).fetchone()
+        if r and check_password_hash(r[0], old_p):
+            conn.execute("UPDATE users SET password=? WHERE id=?", (generate_password_hash(new_p), session['uid']))
+            conn.commit()
+            flash("Mot de passe mis à jour avec succès !")
+        else:
+            flash("L'ancien mot de passe est incorrect.")
+            
+    return redirect(url_for('profile'))
+
+@app.route('/clear_history')
+def clear_history():
+    if 'uid' in session:
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("DELETE FROM historique WHERE user_id=?", (session['uid'],))
+            conn.commit()
+            flash("Historique effacé.")
+    return redirect(url_for('profile'))
+
+@app.route('/reset_all')
+def reset_all():
+    if 'uid' in session:
+        uid = session['uid']
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute("DELETE FROM courses WHERE user_id=?", (uid,))
+            conn.execute("DELETE FROM historique WHERE user_id=?", (uid,))
+            conn.execute("DELETE FROM templates WHERE user_id=?", (uid,))
+            conn.commit()
+            flash("Toutes vos données ont été réinitialisées.")
     return redirect(url_for('home'))
 
 @app.route('/export_csv')
