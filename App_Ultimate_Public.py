@@ -205,7 +205,7 @@ MAIN_HTML = """
         .form-control, .form-select { 
             background: var(--input-bg) !important; 
             border: 1px solid var(--border) !important; 
-            color: var(--text) !important; 
+            color: write !important; 
             padding: 10px 14px; 
             font-size: 15px; 
         }
@@ -229,7 +229,7 @@ MAIN_HTML = """
 
         .list-group-item { 
             background: var(--card); 
-            color: var(--text); 
+            color:write; 
             border: 1px solid var(--border); 
             margin-bottom: 8px; 
             border-radius: 12px !important; 
@@ -259,7 +259,7 @@ MAIN_HTML = """
             cursor: pointer;
             border: 1px solid var(--border);
             background: var(--card);
-            color: var(--text);
+            color: write;
             transition: all 0.2s;
         }
 
