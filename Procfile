@@ -1,1 +1,0 @@
-web: gunicorn App_Ultimate_plus:app
