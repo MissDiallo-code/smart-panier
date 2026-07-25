@@ -1,4 +1,0 @@
-jus|0.31|True
-riz|0.12|False
-lait|8000.0|False
-pain|-2000.0|False
