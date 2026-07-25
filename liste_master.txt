@@ -1,0 +1,5 @@
+riz|0.16|False|✨ Autre
+pain|2000.0|False|🥖 Boulangerie
+lait|1000.0|False|🥛 Produits Laitiers
+jus|2000.0|False|🥤 Boissons
+viande|500.0|False|🥩 Viandes
